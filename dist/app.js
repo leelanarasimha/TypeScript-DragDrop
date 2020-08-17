@@ -81,6 +81,16 @@ class ProjectState extends State {
     addProject(title, description, people) {
         const project = new Project(Math.random().toString(), title, description, people, ProjectStatus.Active);
         this.projects.push(project);
+        this.updateListeners();
+    }
+    moveProject(projectId, newStatus) {
+        const project = this.projects.find((prj) => prj.id === projectId);
+        if (project && project.status !== newStatus) {
+            project.status = newStatus;
+            this.updateListeners();
+        }
+    }
+    updateListeners() {
         for (const listenerFn of this.listeners) {
             listenerFn(this.projects);
         }
@@ -149,6 +159,7 @@ class ProjectList {
     constructor(type) {
         this.type = type;
         this.assignedProjects = [];
+        this.ulElement = document.getElementById(`${this.type}-projects-list`);
         projectState.addListener((projects) => {
             const relavantProjects = projects.filter((project) => {
                 if (this.type === 'active') {
@@ -159,21 +170,66 @@ class ProjectList {
             this.assignedProjects = relavantProjects;
             this.renderProjects();
         });
+        this.configure();
+    }
+    configure() {
+        this.ulElement.addEventListener('dragover', this.dragOverHandler);
+        this.ulElement.addEventListener('dragleave', this.dragLeaveHandler);
+        this.ulElement.addEventListener('drop', this.dropHandler);
+    }
+    dragOverHandler(event) {
+        event.preventDefault();
+        this.ulElement.classList.add('droppable');
+    }
+    dragLeaveHandler(event) {
+        this.ulElement.classList.remove('droppable');
+    }
+    dropHandler(event) {
+        if (event.dataTransfer &&
+            event.dataTransfer.types[0] === 'text/plain') {
+            let projectId = event.dataTransfer.getData('text/plain');
+            projectState.moveProject(projectId, this.type === 'active'
+                ? ProjectStatus.Active
+                : ProjectStatus.Finished);
+            this.ulElement.classList.remove('droppable');
+        }
     }
     renderProjects() {
-        const listEl = document.getElementById(`${this.type}-projects-list`);
-        listEl.innerHTML = '';
+        this.ulElement.innerHTML = '';
         for (const project of this.assignedProjects) {
-            new ProjectItem(project, listEl);
+            new ProjectItem(project, this.ulElement);
         }
     }
 }
+__decorate([
+    autobind
+], ProjectList.prototype, "dragOverHandler", null);
+__decorate([
+    autobind
+], ProjectList.prototype, "dragLeaveHandler", null);
+__decorate([
+    autobind
+], ProjectList.prototype, "dropHandler", null);
 class ProjectItem {
     constructor(project, element) {
         this.project = project;
         this.element = element;
         this.liElement = document.createElement('li');
+        this.liElement.setAttribute('draggable', 'true');
         this.renderContent();
+        this.configure();
+    }
+    configure() {
+        this.liElement.addEventListener('dragstart', this.dragStartHandler);
+        this.liElement.addEventListener('dragend', this.dragEndHandler);
+    }
+    dragStartHandler(event) {
+        event.dataTransfer.setData('text/plain', this.project.id);
+        event.dataTransfer.effectAllowed = 'move';
+        console.log('drag start');
+    }
+    dragEndHandler(event) {
+        console.log('dragend');
     }
     get person() {
         if (this.project.people === 1) {
@@ -189,6 +245,9 @@ class ProjectItem {
         this.element.appendChild(this.liElement);
     }
 }
+__decorate([
+    autobind
+], ProjectItem.prototype, "dragStartHandler", null);
 const projectInput = new ProjectInput();
 const activeprojectList = new ProjectList('active');
 const finishedprojectList = new ProjectList('finished');
